@@ -39,6 +39,9 @@ pub struct TaskManager {
     inner: UPSafeCell<TaskManagerInner>,
 }
 
+/// max syscall
+pub const MAX_SYS_CALL: usize = 500;
+
 /// Inner of Task Manager
 pub struct TaskManagerInner {
     /// task list
@@ -54,7 +57,7 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
-            syscall_count: [0; 512]
+            syscall_count: [0; MAX_SYS_CALL]
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));

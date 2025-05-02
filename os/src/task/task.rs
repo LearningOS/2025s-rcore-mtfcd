@@ -1,6 +1,6 @@
 //! Types related to task management
 
-use super::TaskContext;
+use super::{TaskContext, MAX_SYS_CALL};
 
 /// The task control block (TCB) of a task.
 #[derive(Copy, Clone)]
@@ -10,7 +10,7 @@ pub struct TaskControlBlock {
     /// The task context
     pub task_cx: TaskContext,
     /// count of every syscall
-    pub syscall_count: [usize; 512],
+    pub syscall_count: [usize; MAX_SYS_CALL],
 }
 
 /// The status of a task
