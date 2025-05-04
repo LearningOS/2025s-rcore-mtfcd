@@ -1,6 +1,7 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
 use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+// use crate::task;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
@@ -166,7 +167,15 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
-        let ppn = page_table.translate(vpn).unwrap().ppn();
+        let ppn = match page_table.translate(vpn) {
+            Some(p) => {
+                if !p.is_valid() || !p.readable() {
+                    return v;
+                }
+                p.ppn()
+            }
+            None => return v,
+        };
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();
         end_va = end_va.min(VirtAddr::from(end));
@@ -178,4 +187,44 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+/// Translate user ptr
+pub fn write_to_byte_buffer(token: usize, ptr: *const u8, data: &[u8]) -> isize {
+    let page_table = PageTable::from_token(token);
+    let mut start = ptr as usize;
+    let end = start + data.len();
+    let mut cur = 0;
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        let ppn = match page_table.translate(vpn) {
+            Some(p) => {
+                if !p.is_valid() || !p.writable() {
+                    return -1;
+                }
+                p.ppn()
+            }
+            None => return -1,
+        };
+        vpn.step();
+        let mut end_va: VirtAddr = vpn.into();
+        end_va = end_va.min(VirtAddr::from(end));
+        let buf = if end_va.page_offset() == 0 {
+            &mut ppn.get_bytes_array()[start_va.page_offset()..]
+        } else {
+            &mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]
+        };
+        buf.copy_from_slice(&data[cur..]);
+        cur += buf.len();
+
+        if cur > data.len() {
+            return -1;
+        }
+        start = end_va.into();
+    }
+    if cur != data.len() {
+        return -1;
+    }
+    0
 }

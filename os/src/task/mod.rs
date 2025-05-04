@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -153,6 +154,29 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    fn syscall_count_add(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].syscall_count[syscall_id] += 1;
+    }
+    fn get_syscall_count(&self, syscall_id: usize) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].syscall_count[syscall_id]
+    }
+    fn map_frame(&self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task]
+            .memory_set
+            .checked_insert_frame_area(start_va, end_va, permission)
+    }
+    fn unmap_frame(&self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].memory_set.pop(start_va, end_va);
+        0
+    }
 }
 
 /// Run the first task in task list.
@@ -201,4 +225,23 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// add 1 to current task's syscall
+pub fn syscall_count_add(syscall_id: usize) {
+    TASK_MANAGER.syscall_count_add(syscall_id)
+}
+
+/// get current task's syscall count
+pub fn get_syscall_count(syscall_id: usize) -> usize {
+    TASK_MANAGER.get_syscall_count(syscall_id)
+}
+
+/// mapped frame
+pub fn save_frame(start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) -> isize {
+    TASK_MANAGER.map_frame(start_va, end_va, permission)
+}
+/// unmapped frame
+pub fn unmap_frame(start_va: VirtAddr, end_va: VirtAddr) -> isize {
+    TASK_MANAGER.unmap_frame(start_va, end_va)
 }
